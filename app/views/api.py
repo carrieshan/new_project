@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify, request
-from app import db
+from app import db, scheduler
 from app.models.database import DatabaseConfig, QueryHistory, ScheduledTask, SavedQuery
 from app.utils.database_helper import DatabaseHelper
+from app.utils.scheduler_helper import parse_cron
 import json
 from datetime import datetime
 
@@ -118,17 +119,35 @@ def get_tasks():
 @api_bp.route('/tasks', methods=['POST'])
 def add_task():
     data = request.json
-    new_task = ScheduledTask(
-        name=data['name'],
-        db_config_id=data['db_config_id'],
-        sql_query=data['query'],
-        cron_expression=data['cron'],
-        check_type=data.get('check_type', 'has_results'),
-        threshold=data.get('threshold', 0)
-    )
-    db.session.add(new_task)
-    db.session.commit()
-    return jsonify({'status': 'success', 'id': new_task.id})
+    try:
+        new_task = ScheduledTask(
+            name=data['name'],
+            db_config_id=data['db_config_id'],
+            sql_query=data.get('sql_query') or data.get('query'),
+            cron_expression=data.get('cron_expression') or data.get('cron'),
+            check_type=data.get('check_type', 'has_results'),
+            threshold=data.get('threshold', 0)
+        )
+        db.session.add(new_task)
+        db.session.commit()
+        
+        # 添加到调度器
+        cron_args = parse_cron(new_task.cron_expression)
+        if cron_args:
+            scheduler.add_job(
+                id=str(new_task.id),
+                func='app.tasks:execute_task',
+                args=[new_task.id],
+                trigger='cron',
+                replace_existing=True,
+                **cron_args
+            )
+            print(f"Added scheduled task {new_task.id}: {new_task.name}")
+            
+        return jsonify({'status': 'success', 'id': new_task.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 @api_bp.route('/query/export_csv', methods=['POST'])
 def export_csv():
@@ -186,3 +205,56 @@ def export_csv():
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
+
+@api_bp.route('/tasks/<int:id>/run', methods=['POST'])
+def run_task(id):
+    """
+    手动触发执行定时任务
+    """
+    task = ScheduledTask.query.get(id)
+    if not task:
+        return jsonify({'status': 'error', 'message': 'Task not found'}), 404
+    
+    try:
+        # 使用唯一ID添加到调度器立即执行
+        job_id = f"manual_{id}_{datetime.now().timestamp()}"
+        scheduler.add_job(
+            id=job_id,
+            func='app.tasks:execute_task',
+            args=[id],
+            trigger='date',
+            run_date=datetime.now()
+        )
+        return jsonify({'status': 'success', 'message': '任务已触发执行'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@api_bp.route('/databases/<int:id>/tables', methods=['GET'])
+def get_database_tables(id):
+    db_config = DatabaseConfig.query.get(id)
+    if not db_config:
+        return jsonify({'status': 'error', 'message': 'Database not found'}), 404
+    
+    result = DatabaseHelper.get_tables(db_config)
+    return jsonify(result)
+
+@api_bp.route('/databases/<int:id>/tables/<table_name>/data', methods=['GET'])
+def get_table_data(id, table_name):
+    db_config = DatabaseConfig.query.get(id)
+    if not db_config:
+        return jsonify({'status': 'error', 'message': 'Database not found'}), 404
+    
+    limit = request.args.get('limit', 100, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    
+    # 获取 filters 参数 (JSON 字符串)
+    filters_json = request.args.get('filters')
+    column_filters = {}
+    if filters_json:
+        try:
+            column_filters = json.loads(filters_json)
+        except:
+            pass
+            
+    result = DatabaseHelper.get_table_data(db_config, table_name, limit, offset, filters=column_filters)
+    return jsonify(result)

@@ -141,7 +141,8 @@
                     <td>${task.cron_expression}</td>
                     <td>${task.check_type}</td>
                     <td>
-                        <button class="btn btn-sm btn-info">编辑</button>
+                        <button class="btn btn-sm btn-primary me-1" onclick="runTask(${task.id})">执行</button>
+                        <button class="btn btn-sm btn-info me-1">编辑</button>
                         <button class="btn btn-sm btn-danger">删除</button>
                     </td>
                 </tr>`;
@@ -150,7 +151,28 @@
         });
     }
 
+    function runTask(id) {
+        if (!confirm('确定要立即执行此任务吗？')) return;
+        
+        $.ajax({
+            url: `/api/tasks/${id}/run`,
+            type: 'POST',
+            success: function(response) {
+                alert('任务已触发执行');
+            },
+            error: function(xhr) {
+                alert('执行失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : '未知错误'));
+            }
+        });
+    }
+
     function addTask() {
+        const form = document.getElementById('addTaskForm');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
         let formData = {};
         $('#addTaskForm').serializeArray().forEach(item => {
             formData[item.name] = item.value;
@@ -162,8 +184,21 @@
             contentType: 'application/json',
             data: JSON.stringify(formData),
             success: function(response) {
-                $('#addTaskModal').modal('hide');
+                // 尝试关闭模态框
+                const modalEl = document.getElementById('addTaskModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) {
+                    modal.hide();
+                } else {
+                    // 如果获取不到实例，尝试用 jQuery
+                    $('#addTaskModal').modal('hide');
+                }
+                
                 loadTasks();
+                form.reset();
+            },
+            error: function(xhr) {
+                alert('保存失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : '未知错误'));
             }
         });
     }

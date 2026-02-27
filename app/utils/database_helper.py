@@ -1,5 +1,5 @@
 from app import db
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from contextlib import contextmanager
 
 class DatabaseHelper:
@@ -54,5 +54,77 @@ class DatabaseHelper:
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
                 return {'status': 'success', 'message': 'Connection successful'}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+
+    @classmethod
+    def get_tables(cls, db_config):
+        """获取数据库所有表名"""
+        try:
+            url = cls.get_connection_url(db_config)
+            engine = create_engine(url)
+            inspector = inspect(engine)
+            return {'status': 'success', 'tables': inspector.get_table_names()}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+
+    @classmethod
+    def get_table_data(cls, db_config, table_name, limit=100, offset=0, filters=None):
+        """获取表数据，支持分页和列筛选"""
+        try:
+            url = cls.get_connection_url(db_config)
+            engine = create_engine(url)
+            
+            # 验证表名是否存在，防止注入
+            inspector = inspect(engine)
+            if table_name not in inspector.get_table_names():
+                return {'status': 'error', 'message': 'Table not found'}
+            
+            # 构建查询
+            query_str = f"SELECT * FROM {table_name}"
+            params = {}
+            conditions = []
+            
+            columns_info = inspector.get_columns(table_name)
+            col_names = [c['name'] for c in columns_info]
+            
+            # 列筛选
+            if filters:
+                for col, val in filters.items():
+                    # 验证列名是否存在
+                    if col in col_names and val is not None:
+                        val_str = str(val).strip()
+                        if val_str:
+                            param_name = f"filter_{col}"
+                            conditions.append(f"{col} LIKE :{param_name}")
+                            params[param_name] = f"%{val_str}%"
+
+            if conditions:
+                query_str += " WHERE " + " AND ".join(conditions)
+
+            # 获取总数 (用于分页)
+            count_query = f"SELECT COUNT(*) FROM ({query_str}) as subquery"
+            
+            # 添加分页
+            query_str += f" LIMIT {limit} OFFSET {offset}"
+            
+            with engine.connect() as conn:
+                # 执行总数查询
+                total_result = conn.execute(text(count_query), params)
+                total = total_result.scalar()
+                
+                # 执行数据查询
+                result = conn.execute(text(query_str), params)
+                columns = list(result.keys())
+                rows = [list(row) for row in result.fetchall()]
+                
+                return {
+                    'status': 'success',
+                    'columns': columns,
+                    'rows': rows,
+                    'total': total,
+                    'limit': limit,
+                    'offset': offset
+                }
         except Exception as e:
             return {'status': 'error', 'message': str(e)}

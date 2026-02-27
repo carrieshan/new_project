@@ -10,6 +10,10 @@ def index():
 def databases():
     return render_template('databases.html')
 
+@main_bp.route('/overview')
+def overview():
+    return render_template('overview.html')
+
 @main_bp.route('/query')
 def query():
     return render_template('query.html')
