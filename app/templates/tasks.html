@@ -14,6 +14,7 @@
         <tr>
             <th>ID</th>
             <th>名称</th>
+            <th>状态</th>
             <th>Cron 表达式</th>
             <th>检查类型</th>
             <th>操作</th>
@@ -135,19 +136,40 @@
         $.get('/api/tasks', function(data) {
             let html = '';
             data.forEach(task => {
+                const statusBadge = task.is_active 
+                    ? '<span class="badge bg-success">进行中</span>' 
+                    : '<span class="badge bg-secondary">已停止</span>';
+                
+                const toggleBtn = task.is_active
+                    ? `<button class="btn btn-sm btn-warning me-1" onclick="toggleTask(${task.id})">停止</button>`
+                    : `<button class="btn btn-sm btn-success me-1" onclick="toggleTask(${task.id})">启动</button>`;
+
                 html += `<tr>
                     <td>${task.id}</td>
                     <td>${task.name}</td>
+                    <td>${statusBadge}</td>
                     <td>${task.cron_expression}</td>
                     <td>${task.check_type}</td>
                     <td>
-                        <button class="btn btn-sm btn-primary me-1" onclick="runTask(${task.id})">执行</button>
-                        <button class="btn btn-sm btn-info me-1">编辑</button>
+                        <button class="btn btn-sm btn-primary me-1" onclick="runTask(${task.id})">立即执行</button>
+                        ${toggleBtn}
                         <button class="btn btn-sm btn-danger">删除</button>
                     </td>
                 </tr>`;
             });
             $('#taskTableBody').html(html);
+        });
+    }
+
+    function toggleTask(id) {
+        $.post(`/api/tasks/${id}/toggle`, function(response) {
+            if (response.status === 'success') {
+                loadTasks();
+            } else {
+                alert('操作失败: ' + response.message);
+            }
+        }).fail(function(xhr) {
+            alert('操作失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : '未知错误'));
         });
     }
 

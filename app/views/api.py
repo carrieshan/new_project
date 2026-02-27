@@ -113,8 +113,41 @@ def get_tasks():
         'id': t.id,
         'name': t.name,
         'cron_expression': t.cron_expression,
-        'check_type': t.check_type
+        'check_type': t.check_type,
+        'is_active': t.is_active
     } for t in tasks])
+
+@api_bp.route('/tasks/<int:id>/toggle', methods=['POST'])
+def toggle_task(id):
+    task = ScheduledTask.query.get(id)
+    if not task:
+        return jsonify({'status': 'error', 'message': 'Task not found'}), 404
+    
+    try:
+        task.is_active = not task.is_active
+        db.session.commit()
+        
+        if task.is_active:
+            # 启动任务
+            cron_args = parse_cron(task.cron_expression)
+            if cron_args:
+                scheduler.add_job(
+                    id=str(task.id),
+                    func='app.tasks:execute_task',
+                    args=[task.id],
+                    trigger='cron',
+                    replace_existing=True,
+                    **cron_args
+                )
+        else:
+            # 停止任务
+            if scheduler.get_job(str(task.id)):
+                scheduler.remove_job(str(task.id))
+                
+        return jsonify({'status': 'success', 'is_active': task.is_active})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @api_bp.route('/tasks', methods=['POST'])
 def add_task():
