@@ -1,0 +1,67 @@
+{
+  "report_title": "数据库检查报告",
+  "generated_time": "2026-02-27 10:32:45",
+  "summary": {
+    "total_checks": 11,
+    "passed_checks": 11,
+    "failed_checks": 0,
+    "error_checks": 0
+  },
+  "details": [
+    {
+      "check": "数据库完整性检查",
+      "result": "完整",
+      "status": "通过"
+    },
+    {
+      "check": "数据库索引检查",
+      "result": "找到 3 个索引",
+      "status": "通过"
+    },
+    {
+      "check": "数据库触发器检查",
+      "result": "找到 0 个触发器",
+      "status": "通过"
+    },
+    {
+      "check": "数据库视图检查",
+      "result": "找到 0 个视图",
+      "status": "通过"
+    },
+    {
+      "check": "表 users 是否存在",
+      "result": "存在",
+      "status": "通过"
+    },
+    {
+      "check": "users 表的行数",
+      "result": "2 行",
+      "status": "通过"
+    },
+    {
+      "check": "users 表的列信息",
+      "result": "找到 4 列: ['id', 'name', 'email', 'created_at']",
+      "status": "通过"
+    },
+    {
+      "check": "表 orders 是否存在",
+      "result": "存在",
+      "status": "通过"
+    },
+    {
+      "check": "orders 表的行数",
+      "result": "4 行",
+      "status": "通过"
+    },
+    {
+      "check": "orders 表的列信息",
+      "result": "找到 5 列: ['id', 'user_id', 'product_name', 'quantity', 'order_date']",
+      "status": "通过"
+    },
+    {
+      "check": "外键约束检查",
+      "result": "无外键问题",
+      "status": "通过"
+    }
+  ]
+}

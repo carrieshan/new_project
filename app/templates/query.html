@@ -1,0 +1,278 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>SQL 查询</h2>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <label class="form-label">选择数据库</label>
+        <select class="form-select" id="dbSelect">
+            <option value="">请选择...</option>
+        </select>
+    </div>
+    <div class="col-md-8">
+        <button class="btn btn-primary mt-4" onclick="executeQuery()">执行查询</button>
+        <button class="btn btn-success mt-4 ms-2" onclick="exportToCsv()">导出 CSV</button>
+        <button class="btn btn-secondary mt-4 ms-2" data-bs-toggle="modal" data-bs-target="#saveQueryModal">保存 SQL</button>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-12">
+        <label class="form-label">已保存的 SQL</label>
+        <div class="input-group">
+            <select class="form-select" id="savedQueriesSelect">
+                <option value="">选择已保存的 SQL...</option>
+            </select>
+            <button class="btn btn-outline-secondary" type="button" onclick="loadSavedQuery()">加载</button>
+            <button class="btn btn-outline-danger" type="button" onclick="deleteSavedQuery()">删除</button>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-12">
+        <label class="form-label">SQL 语句</label>
+        <textarea class="form-control" id="sqlQuery" rows="5"></textarea>
+    </div>
+</div>
+
+<div class="modal fade" id="saveQueryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">保存 SQL 查询</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">名称</label>
+                    <input type="text" class="form-control" id="saveQueryName">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">描述</label>
+                    <textarea class="form-control" id="saveQueryDesc"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveQuery()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <h4>查询结果</h4>
+        <div id="queryResult"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function loadDatabases() {
+        $.get('/api/databases', function(data) {
+            let options = '<option value="">请选择...</option>';
+            data.forEach(db => {
+                options += `<option value="${db.id}">${db.name}</option>`;
+            });
+            $('#dbSelect').html(options);
+        });
+    }
+
+    function executeQuery() {
+        let dbId = $('#dbSelect').val();
+        let query = $('#sqlQuery').val();
+
+        if (!dbId || !query) {
+            alert('请选择数据库并输入查询语句');
+            return;
+        }
+
+        $.ajax({
+            url: '/api/query/execute',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ db_id: dbId, query: query }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    let table = '<div class="table-responsive" style="max-height: 600px; overflow-y: auto;">';
+                    table += '<table class="table table-bordered table-striped table-hover text-nowrap align-middle mb-0">';
+                    table += '<thead class="table-light" style="position: sticky; top: 0; z-index: 1;"><tr>';
+                    response.columns.forEach(col => {
+                        table += `<th>${col}</th>`;
+                    });
+                    table += '</tr></thead><tbody>';
+                    response.rows.forEach(row => {
+                        table += '<tr>';
+                        row.forEach(cell => {
+                            // 处理 null 值显示
+                            let displayCell = cell === null ? 'NULL' : cell;
+                            // 简单的 HTML 转义防止 XSS (虽然后端通常安全，但在前端做一下更好)
+                            if (typeof displayCell === 'string') {
+                                displayCell = displayCell.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                            }
+                            table += `<td>${displayCell}</td>`;
+                        });
+                        table += '</tr>';
+                    });
+                    table += '</tbody></table></div>';
+                    table += `<div class="mt-2 text-muted small">共 ${response.count} 条记录</div>`;
+                    $('#queryResult').html(table);
+                } else {
+                    $('#queryResult').html(`<div class="alert alert-danger">${response.error}</div>`);
+                }
+            }
+        });
+    }
+
+    function exportToCsv() {
+        let dbId = $('#dbSelect').val();
+        let query = $('#sqlQuery').val();
+
+        if (!dbId || !query) {
+            alert('请选择数据库并输入查询语句');
+            return;
+        }
+
+        // 发送 POST 请求到后端导出接口
+        $.ajax({
+            url: '/api/query/export_csv',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ db_id: dbId, query: query }),
+            xhrFields: {
+                responseType: 'blob' // 重要：告诉 jQuery 以 blob 形式接收响应
+            },
+            success: function(blob, status, xhr) {
+                // 创建一个临时的 URL 对象来下载文件
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                // 尝试从响应头获取文件名，如果获取不到则使用默认名
+                const disposition = xhr.getResponseHeader('Content-Disposition');
+                let filename = "query_result.csv";
+                if (disposition && disposition.indexOf('attachment') !== -1) {
+                    const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                    const matches = filenameRegex.exec(disposition);
+                    if (matches != null && matches[1]) {
+                        filename = matches[1].replace(/['"]/g, '');
+                    }
+                }
+                a.download = filename;
+                
+                document.body.appendChild(a);
+                a.click();
+                
+                // 清理 DOM 元素和 URL 对象
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            },
+            error: function(xhr, status, error) {
+                // 尝试解析错误响应
+                let errorMessage = '导出失败';
+                try {
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        try {
+                            const errData = JSON.parse(reader.result);
+                            errorMessage = errData.message || errorMessage;
+                        } catch (e) {
+                            errorMessage = reader.result.substring(0, 100); // 显示前100个字符
+                        }
+                        alert(errorMessage);
+                    };
+                    reader.readAsText(xhr.response);
+                } catch (e) {
+                    alert(errorMessage);
+                }
+            }
+        });
+    }
+
+    $(document).ready(function() {
+        loadDatabases();
+        loadSavedQueries();
+    });
+
+    function loadSavedQueries() {
+        $.get('/api/saved_queries', function(data) {
+            let options = '<option value="">选择已保存的 SQL...</option>';
+            data.forEach(q => {
+                // escape sql content for data attribute
+                let safeSql = q.sql_content.replace(/"/g, '&quot;');
+                options += `<option value="${q.id}" data-sql="${safeSql}" data-db="${q.db_config_id || ''}">${q.name}</option>`;
+            });
+            $('#savedQueriesSelect').html(options);
+        });
+    }
+
+    function saveQuery() {
+        let name = $('#saveQueryName').val();
+        let desc = $('#saveQueryDesc').val();
+        let sql = $('#sqlQuery').val();
+        let dbId = $('#dbSelect').val();
+
+        if (!name || !sql) {
+            alert('名称和 SQL 语句不能为空');
+            return;
+        }
+
+        $.ajax({
+            url: '/api/saved_queries',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                name: name,
+                description: desc,
+                sql_content: sql,
+                db_config_id: dbId ? dbId : null
+            }),
+            success: function(response) {
+                if (response.status === 'success') {
+                    alert('保存成功');
+                    $('#saveQueryModal').modal('hide');
+                    loadSavedQueries();
+                } else {
+                    alert('保存失败');
+                }
+            }
+        });
+    }
+
+    function loadSavedQuery() {
+        let selectedOption = $('#savedQueriesSelect option:selected');
+        let sql = selectedOption.data('sql');
+        let dbId = selectedOption.data('db');
+        
+        if (sql) {
+            $('#sqlQuery').val(sql);
+        }
+        if (dbId) {
+            $('#dbSelect').val(dbId);
+        }
+    }
+
+    function deleteSavedQuery() {
+        let id = $('#savedQueriesSelect').val();
+        if (!id) return;
+
+        if (confirm('确定要删除这个保存的查询吗？')) {
+            $.ajax({
+                url: '/api/saved_queries/' + id,
+                type: 'DELETE',
+                success: function(response) {
+                    if (response.status === 'success') {
+                        loadSavedQueries();
+                        alert('删除成功');
+                    }
+                }
+            });
+        }
+    }
+</script>
+{% endblock %}

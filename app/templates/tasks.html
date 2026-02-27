@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>定时任务管理</h2>
+
+<div class="row mb-3">
+    <div class="col-md-12">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTaskModal">添加任务</button>
+    </div>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>名称</th>
+            <th>Cron 表达式</th>
+            <th>检查类型</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody id="taskTableBody">
+        <!-- 任务列表将在这里动态加载 -->
+    </tbody>
+</table>
+
+<!-- 添加任务模态框 -->
+<div class="modal fade" id="addTaskModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addTaskForm">
+                    <div class="mb-3">
+                        <label class="form-label">任务名称</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">选择数据库</label>
+                        <select class="form-select" name="db_config_id" id="taskDbSelect" required>
+                            <!-- 数据库列表 -->
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">选择已保存的 SQL</label>
+                        <select class="form-select" id="savedQueriesSelect" onchange="loadSavedQueryToTask()">
+                            <option value="">自定义...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">SQL 查询</label>
+                        <textarea class="form-control" name="sql_query" id="sqlQueryTask" rows="3" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cron 表达式</label>
+                        <input type="text" class="form-control" name="cron_expression" required>
+                        <div class="form-text text-muted">
+                            <small>
+                            格式: 分 时 日 月 周 (0-6, 0=周日)<br>
+                            示例:<br>
+                            <code>*/5 * * * *</code> 每5分钟执行一次<br>
+                            <code>0 8 * * *</code> 每天早上8点执行<br>
+                            <code>30 18 * * 5</code> 每周五18:30执行
+                            </small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">检查类型</label>
+                        <select class="form-select" name="check_type">
+                            <option value="has_results">有结果</option>
+                            <option value="no_results">无结果</option>
+                            <option value="count_gt">数量大于阈值</option>
+                            <option value="count_lt">数量小于阈值</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">阈值</label>
+                        <input type="number" class="form-control" name="threshold">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="addTask()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        loadTasks();
+        loadDatabasesAndQueries();
+    });
+
+    function loadDatabasesAndQueries() {
+        $.get('/api/databases', function(data) {
+            let options = '<option value="">请选择...</option>';
+            data.forEach(db => {
+                options += `<option value="${db.id}">${db.name}</option>`;
+            });
+            $('#taskDbSelect').html(options);
+        });
+
+        $.get('/api/saved_queries', function(data) {
+            let options = '<option value="">选择已保存的 SQL...</option>';
+            data.forEach(q => {
+                let safeSql = q.sql_content.replace(/"/g, '&quot;');
+                options += `<option value="${q.id}" data-sql="${safeSql}" data-db="${q.db_config_id || ''}">${q.name}</option>`;
+            });
+            $('#savedQueriesSelect').html(options);
+        });
+    }
+
+    function loadSavedQueryToTask() {
+        let selected = $('#savedQueriesSelect option:selected');
+        let sql = selected.data('sql');
+        let dbId = selected.data('db');
+
+        if (sql) {
+            $('#sqlQueryTask').val(sql);
+        }
+        if (dbId) {
+            $('#taskDbSelect').val(dbId);
+        }
+    }
+
+    function loadTasks() {
+        $.get('/api/tasks', function(data) {
+            let html = '';
+            data.forEach(task => {
+                html += `<tr>
+                    <td>${task.id}</td>
+                    <td>${task.name}</td>
+                    <td>${task.cron_expression}</td>
+                    <td>${task.check_type}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info">编辑</button>
+                        <button class="btn btn-sm btn-danger">删除</button>
+                    </td>
+                </tr>`;
+            });
+            $('#taskTableBody').html(html);
+        });
+    }
+
+    function addTask() {
+        let formData = {};
+        $('#addTaskForm').serializeArray().forEach(item => {
+            formData[item.name] = item.value;
+        });
+
+        $.ajax({
+            url: '/api/tasks',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                $('#addTaskModal').modal('hide');
+                loadTasks();
+            }
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>数据库配置</h2>
+
+<div class="row mb-3">
+    <div class="col-md-12">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDbModal">添加数据库</button>
+    </div>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>名称</th>
+            <th>类型</th>
+            <th>主机</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody id="dbTableBody">
+        <!-- 数据库列表将在这里动态加载 -->
+    </tbody>
+</table>
+
+<!-- 添加数据库模态框 -->
+<div class="modal fade" id="addDbModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加数据库</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addDbForm">
+                    <div class="mb-3">
+                        <label class="form-label">名称</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">类型</label>
+                        <select class="form-select" name="db_type" required>
+                            <option value="mysql">MySQL</option>
+                            <option value="postgresql">PostgreSQL</option>
+                            <option value="sqlite">SQLite</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">主机 (Host)</label>
+                        <input type="text" class="form-control" name="host">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">端口 (Port)</label>
+                        <input type="number" class="form-control" name="port">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">用户名</label>
+                        <input type="text" class="form-control" name="username">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">密码</label>
+                        <input type="password" class="form-control" name="password">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">数据库名</label>
+                        <input type="text" class="form-control" name="database">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-info" onclick="testConnection()">测试连接</button>
+                <button type="button" class="btn btn-primary" onclick="addDatabase()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function loadDatabases() {
+        $.get('/api/databases', function(data) {
+            let html = '';
+            data.forEach(db => {
+                html += `<tr>
+                    <td>${db.id}</td>
+                    <td>${db.name}</td>
+                    <td>${db.type}</td>
+                    <td>${db.host || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info">编辑</button>
+                        <button class="btn btn-sm btn-danger">删除</button>
+                    </td>
+                </tr>`;
+            });
+            $('#dbTableBody').html(html);
+        });
+    }
+
+    function testConnection() {
+        let formData = {};
+        $('#addDbForm').serializeArray().forEach(item => {
+            formData[item.name] = item.value;
+        });
+
+        $.ajax({
+            url: '/api/databases/test',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                if (response.status === 'success') {
+                    alert('连接成功！');
+                } else {
+                    alert('连接失败：' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                alert('请求失败：' + error);
+            }
+        });
+    }
+
+    function addDatabase() {
+        let formData = {};
+        $('#addDbForm').serializeArray().forEach(item => {
+            formData[item.name] = item.value;
+        });
+
+        $.ajax({
+            url: '/api/databases',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                $('#addDbModal').modal('hide');
+                loadDatabases();
+            }
+        });
+    }
+
+    $(document).ready(function() {
+        loadDatabases();
+    });
+</script>
+{% endblock %}
