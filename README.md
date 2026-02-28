@@ -1,62 +1,38 @@
-# 数据库监控系统
+# new_project - 数据库监控系统
 
-这是一个用于监控数据库状态的综合工具，包含数据库健康检查、SQL查询、异常检测、定时任务和邮件通知功能。
+## 功能说明
 
-## 功能特性
+基于 Flask 的数据库监控 Web 应用，支持多种数据库类型的连接管理、在线 SQL 查询、定时任务调度和多渠道告警通知。
 
-### 1. 数据库健康检查
-- 检查表是否存在
-- 检查表的行数
-- 检查表的列信息
-- 检查外键约束
-- 检查数据库完整性
-- 生成详细的检查报告
+## 核心功能
 
-### 2. SQL查询功能
-- 实时SQL执行
-- 结果集展示
-- 查询历史记录
-- 查询性能统计
+- **数据库管理** - 添加/编辑/删除数据库连接（SQLite、MySQL、PostgreSQL）
+- **数据库概览** - 浏览数据库表结构和数据，支持分页和列筛选
+- **SQL 查询** - 在线执行 SQL 查询，支持保存/加载常用 SQL、导出 CSV
+- **定时任务** - Cron 调度 SQL 检查任务，支持异常阈值检测
+- **多渠道通知** - 邮件(SMTP)、飞书、钉钉、企业微信 Webhook
 
-### 3. 异常检测
-- 异常SQL查询检测
-- 阈值设置
-- 报警机制
+## 技术栈
 
-### 4. 定时任务
-- Cron表达式支持
-- 任务调度管理
-- 执行日志记录
+- **后端**: Flask, SQLAlchemy, Flask-APScheduler
+- **前端**: Bootstrap 5, jQuery
+- **数据库**: SQLite (内置), MySQL, PostgreSQL
 
-### 5. 邮件通知
-- SMTP配置
-- 模板化邮件内容
-- 自动发送报告
+## 启动方式
 
-## 使用方法
-
-### 基础数据库检查
 ```bash
-python db_checker.py
+pip install -r requirements.txt
+python run.py
 ```
 
-这将创建一个示例数据库并运行所有检查，最终生成一个名为 `database_check_report.txt` 的报告文件。
+访问 http://127.0.0.1:5000
 
-### 高级数据库检查
-```bash
-python db_checker_advanced.py
-```
+## 目录结构
 
-包含更多检查功能，会生成JSON格式的报告。
-
-### 自动化检查
-```bash
-python db_checker_auto.py
-```
-
-无需交互即可运行检查。
-
-## 系统架构
-
-请参阅 `development_plan.md` 了解完整的系统开发计划
-请参阅 `project_structure.md` 了解项目结构设计
+| 目录/文件 | 说明 |
+|----------|------|
+| `run.py` | 应用入口 |
+| `requirements.txt` | 依赖清单 |
+| `app/` | 应用主目录 |
+| `results/` | CSV 导出结果目录 |
+| `instance/` | SQLite 数据库文件（运行时生成） |
