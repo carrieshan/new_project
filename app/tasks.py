@@ -38,9 +38,15 @@ def execute_task(task_id):
             status=result.get('status', 'error'),
             execution_time=execution_time,
             result_count=result.get('count', 0),
-            error_message=result.get('error')
+            error_message=result.get('error'),
+            task_id=task.id
         )
         db.session.add(history)
+
+        # 更新任务最后运行时间和状态
+        task.last_run = end_time
+        task.last_run_status = result.get('status', 'error')
+        
         db.session.commit()
 
         # 保存结果为 CSV

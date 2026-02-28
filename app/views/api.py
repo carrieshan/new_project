@@ -114,8 +114,22 @@ def get_tasks():
         'name': t.name,
         'cron_expression': t.cron_expression,
         'check_type': t.check_type,
-        'is_active': t.is_active
+        'is_active': t.is_active,
+        'last_run': t.last_run.strftime('%Y-%m-%d %H:%M:%S') if t.last_run else None,
+        'last_run_status': t.last_run_status
     } for t in tasks])
+
+@api_bp.route('/tasks/<int:id>/history', methods=['GET'])
+def get_task_history(id):
+    history = QueryHistory.query.filter_by(task_id=id).order_by(QueryHistory.created_at.desc()).limit(20).all()
+    return jsonify([{
+        'id': h.id,
+        'status': h.status,
+        'execution_time': h.execution_time,
+        'result_count': h.result_count,
+        'error_message': h.error_message,
+        'created_at': h.created_at.strftime('%Y-%m-%d %H:%M:%S')
+    } for h in history])
 
 @api_bp.route('/tasks/<int:id>/toggle', methods=['POST'])
 def toggle_task(id):

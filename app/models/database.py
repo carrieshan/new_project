@@ -28,6 +28,7 @@ class QueryHistory(db.Model):
     execution_time = db.Column(db.Float)  # seconds
     result_count = db.Column(db.Integer)
     error_message = db.Column(db.Text)
+    task_id = db.Column(db.Integer, db.ForeignKey('scheduled_task.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 class ScheduledTask(db.Model):
@@ -40,4 +41,5 @@ class ScheduledTask(db.Model):
     threshold = db.Column(db.Integer)
     is_active = db.Column(db.Boolean, default=True)
     last_run = db.Column(db.DateTime)
+    last_run_status = db.Column(db.String(20))  # success, error
     created_at = db.Column(db.DateTime, default=datetime.now)
