@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">任务执行日志</h5>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" id="taskFilter" style="width: 200px;">
+                <option value="">所有任务</option>
+            </select>
+            <select class="form-select form-select-sm" id="statusFilter" style="width: 150px;">
+                <option value="all">所有状态</option>
+                <option value="success">成功</option>
+                <option value="error">失败</option>
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="loadLogs(1)">刷新</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>任务名称</th>
+                        <th>数据库</th>
+                        <th>状态</th>
+                        <th>结果数</th>
+                        <th>耗时(s)</th>
+                        <th>执行时间</th>
+                        <th>详情</th>
+                    </tr>
+                </thead>
+                <tbody id="logsTableBody">
+                </tbody>
+            </table>
+        </div>
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-end" id="pagination">
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<!-- Log Details Modal -->
+<div class="modal fade" id="logDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">日志详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="fw-bold">SQL查询:</label>
+                    <pre class="bg-light p-2 border rounded" id="detailSql" style="white-space: pre-wrap; word-break: break-all;"></pre>
+                </div>
+                <div class="mb-3" id="detailErrorContainer" style="display:none;">
+                    <label class="fw-bold text-danger">错误信息:</label>
+                    <pre class="bg-light p-2 border rounded text-danger" id="detailError" style="white-space: pre-wrap; word-break: break-all;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentPage = 1;
+    let currentLogs = [];
+
+    $(document).ready(function() {
+        loadTasksForFilter();
+        loadLogs(1);
+
+        $('#taskFilter').change(function() {
+            loadLogs(1);
+        });
+
+        $('#statusFilter').change(function() {
+            loadLogs(1);
+        });
+    });
+
+    function loadTasksForFilter() {
+        $.get('/api/tasks', function(tasks) {
+            const select = $('#taskFilter');
+            tasks.forEach(task => {
+                select.append(`<option value="${task.id}">${task.name}</option>`);
+            });
+            
+            // Set initial filter from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const initialTaskId = urlParams.get('task_id');
+            if (initialTaskId) {
+                select.val(initialTaskId);
+                loadLogs(1); // Reload with filter
+            }
+        });
+    }
+
+    function loadLogs(page) {
+        currentPage = page;
+        const taskId = $('#taskFilter').val();
+        const status = $('#statusFilter').val();
+        
+        $.get('/api/logs', {
+            page: page,
+            per_page: 20,
+            task_id: taskId,
+            status: status
+        }, function(data) {
+            currentLogs = data.items;
+            const tbody = $('#logsTableBody');
+            tbody.empty();
+            
+            if (data.items.length === 0) {
+                tbody.append('<tr><td colspan="8" class="text-center">暂无日志</td></tr>');
+            } else {
+                data.items.forEach(log => {
+                    let statusBadge = log.status === 'success' ? 
+                        '<span class="badge bg-success">成功</span>' : 
+                        '<span class="badge bg-danger">失败</span>';
+                    
+                    let row = `
+                        <tr>
+                            <td>${log.id}</td>
+                            <td>${log.task_name}</td>
+                            <td>${log.db_name}</td>
+                            <td>${statusBadge}</td>
+                            <td>${log.result_count !== null ? log.result_count : '-'}</td>
+                            <td>${log.execution_time ? log.execution_time.toFixed(3) : '-'}</td>
+                            <td>${log.created_at}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info" onclick="showDetails(${log.id})">查看</button>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                });
+            }
+            
+            renderPagination(data.current_page, data.pages);
+        });
+    }
+
+    function renderPagination(current, total) {
+        const pagination = $('#pagination');
+        pagination.empty();
+        
+        if (total <= 1) return;
+        
+        let prevDisabled = current === 1 ? 'disabled' : '';
+        pagination.append(`
+            <li class="page-item ${prevDisabled}">
+                <a class="page-link" href="#" onclick="loadLogs(${current - 1}); return false;">上一页</a>
+            </li>
+        `);
+        
+        for (let i = 1; i <= total; i++) {
+            if (i === 1 || i === total || (i >= current - 2 && i <= current + 2)) {
+                let active = i === current ? 'active' : '';
+                pagination.append(`
+                    <li class="page-item ${active}">
+                        <a class="page-link" href="#" onclick="loadLogs(${i}); return false;">${i}</a>
+                    </li>
+                `);
+            } else if (i === current - 3 || i === current + 3) {
+                 pagination.append(`<li class="page-item disabled"><a class="page-link">...</a></li>`);
+            }
+        }
+        
+        let nextDisabled = current === total ? 'disabled' : '';
+        pagination.append(`
+            <li class="page-item ${nextDisabled}">
+                <a class="page-link" href="#" onclick="loadLogs(${current + 1}); return false;">下一页</a>
+            </li>
+        `);
+    }
+
+    function showDetails(id) {
+        const log = currentLogs.find(l => l.id === id);
+        if (!log) return;
+        
+        $('#detailSql').text(log.sql_query);
+        if (log.error_message) {
+            $('#detailError').text(log.error_message);
+            $('#detailErrorContainer').show();
+        } else {
+            $('#detailErrorContainer').hide();
+        }
+        new bootstrap.Modal(document.getElementById('logDetailsModal')).show();
+    }
+</script>
+{% endblock %}

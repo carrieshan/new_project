@@ -31,6 +31,12 @@ class QueryHistory(db.Model):
     task_id = db.Column(db.Integer, db.ForeignKey('scheduled_task.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
+class SystemConfig(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(50), unique=True, nullable=False)
+    value = db.Column(db.String(500))
+    description = db.Column(db.String(200))
+
 class ScheduledTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
@@ -42,4 +48,9 @@ class ScheduledTask(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     last_run = db.Column(db.DateTime)
     last_run_status = db.Column(db.String(20))  # success, error
+    notify_email = db.Column(db.String(200))
+    notify_feishu = db.Column(db.Boolean, default=False)
+    notify_dingtalk = db.Column(db.Boolean, default=False)
+    notify_wechat = db.Column(db.Boolean, default=False)
+    notify_rule = db.Column(db.String(20))  # failure, success, both, none
     created_at = db.Column(db.DateTime, default=datetime.now)

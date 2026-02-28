@@ -5,7 +5,7 @@
 
 <div class="row mb-3">
     <div class="col-md-12">
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDbModal">添加数据库</button>
+        <button class="btn btn-primary" onclick="openAddDbModal()">添加数据库</button>
     </div>
 </div>
 
@@ -16,6 +16,8 @@
             <th>名称</th>
             <th>类型</th>
             <th>主机</th>
+            <th>端口</th>
+            <th>数据库名</th>
             <th>操作</th>
         </tr>
     </thead>
@@ -24,16 +26,17 @@
     </tbody>
 </table>
 
-<!-- 添加数据库模态框 -->
+<!-- 添加/编辑数据库模态框 -->
 <div class="modal fade" id="addDbModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">添加数据库</h5>
+                <h5 class="modal-title" id="dbModalTitle">添加数据库</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="addDbForm">
+                    <input type="hidden" name="id" id="dbEditId">
                     <div class="mb-3">
                         <label class="form-label">名称</label>
                         <input type="text" class="form-control" name="name" required>
@@ -71,7 +74,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-info" onclick="testConnection()">测试连接</button>
-                <button type="button" class="btn btn-primary" onclick="addDatabase()">保存</button>
+                <button type="button" class="btn btn-primary" onclick="saveDatabase()">保存</button>
             </div>
         </div>
     </div>
@@ -81,22 +84,80 @@
 
 {% block scripts %}
 <script>
+    let allDatabases = [];
+
     function loadDatabases() {
-        $.get('/api/databases', function(data) {
+        $.get('/api/databases', function (data) {
+            allDatabases = data;
             let html = '';
             data.forEach(db => {
                 html += `<tr>
                     <td>${db.id}</td>
                     <td>${db.name}</td>
-                    <td>${db.type}</td>
+                    <td><span class="badge bg-info">${db.type}</span></td>
                     <td>${db.host || '-'}</td>
+                    <td>${db.port || '-'}</td>
+                    <td>${db.database || '-'}</td>
                     <td>
-                        <button class="btn btn-sm btn-info">编辑</button>
-                        <button class="btn btn-sm btn-danger">删除</button>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editDatabase(${db.id})">
+                            <i class="bi bi-pencil"></i> 编辑
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteDatabase(${db.id})">
+                            <i class="bi bi-trash"></i> 删除
+                        </button>
                     </td>
                 </tr>`;
             });
+            if (data.length === 0) {
+                html = '<tr><td colspan="7" class="text-center text-muted">暂无数据库配置</td></tr>';
+            }
             $('#dbTableBody').html(html);
+        });
+    }
+
+    function openAddDbModal() {
+        $('#dbEditId').val('');
+        $('#addDbForm')[0].reset();
+        $('#dbModalTitle').text('添加数据库');
+        new bootstrap.Modal(document.getElementById('addDbModal')).show();
+    }
+
+    function editDatabase(id) {
+        const db = allDatabases.find(d => d.id === id);
+        if (!db) return;
+
+        $('#dbEditId').val(db.id);
+        $('#addDbForm [name="name"]').val(db.name);
+        $('#addDbForm [name="db_type"]').val(db.type);
+        $('#addDbForm [name="host"]').val(db.host);
+        $('#addDbForm [name="port"]').val(db.port);
+        $('#addDbForm [name="database"]').val(db.database);
+        // 密码和用户名不回填（安全考虑），如需修改需重新输入
+        $('#addDbForm [name="username"]').val('');
+        $('#addDbForm [name="password"]').val('');
+
+        $('#dbModalTitle').text('编辑数据库');
+        new bootstrap.Modal(document.getElementById('addDbModal')).show();
+    }
+
+    function deleteDatabase(id) {
+        const db = allDatabases.find(d => d.id === id);
+        if (!confirm(`确定要删除数据库 "${db ? db.name : id}" 吗？`)) return;
+
+        $.ajax({
+            url: `/api/databases/${id}`,
+            type: 'DELETE',
+            success: function (response) {
+                if (response.status === 'success') {
+                    showToast('数据库已删除');
+                    loadDatabases();
+                } else {
+                    showToast(response.message || '删除失败', 'error');
+                }
+            },
+            error: function (xhr) {
+                showToast(xhr.responseJSON ? xhr.responseJSON.message : '删除失败', 'error');
+            }
         });
     }
 
@@ -111,38 +172,52 @@
             type: 'POST',
             contentType: 'application/json',
             data: JSON.stringify(formData),
-            success: function(response) {
+            success: function (response) {
                 if (response.status === 'success') {
-                    alert('连接成功！');
+                    showToast('连接成功！');
                 } else {
-                    alert('连接失败：' + response.message);
+                    showToast('连接失败：' + response.message, 'error');
                 }
             },
-            error: function(xhr, status, error) {
-                alert('请求失败：' + error);
+            error: function (xhr, status, error) {
+                showToast('请求失败：' + error, 'error');
             }
         });
     }
 
-    function addDatabase() {
+    function saveDatabase() {
         let formData = {};
         $('#addDbForm').serializeArray().forEach(item => {
             formData[item.name] = item.value;
         });
 
+        const editId = $('#dbEditId').val();
+        const method = editId ? 'PUT' : 'POST';
+        const url = editId ? `/api/databases/${editId}` : '/api/databases';
+
         $.ajax({
-            url: '/api/databases',
-            type: 'POST',
+            url: url,
+            type: method,
             contentType: 'application/json',
             data: JSON.stringify(formData),
-            success: function(response) {
-                $('#addDbModal').modal('hide');
-                loadDatabases();
+            success: function (response) {
+                if (response.status === 'success') {
+                    const modalEl = document.getElementById('addDbModal');
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                    showToast(editId ? '数据库配置已更新' : '数据库已添加');
+                    loadDatabases();
+                } else {
+                    showToast(response.message || '保存失败', 'error');
+                }
+            },
+            error: function (xhr) {
+                showToast(xhr.responseJSON ? xhr.responseJSON.message : '保存失败', 'error');
             }
         });
     }
 
-    $(document).ready(function() {
+    $(document).ready(function () {
         loadDatabases();
     });
 </script>

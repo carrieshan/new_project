@@ -1,6 +1,12 @@
+import logging
 from app import db
 from sqlalchemy import create_engine, text, inspect
 from contextlib import contextmanager
+
+logger = logging.getLogger('db_monitor')
+
+# 引擎缓存，避免每次查询都创建新引擎
+_engine_cache = {}
 
 class DatabaseHelper:
     @staticmethod
@@ -15,9 +21,29 @@ class DatabaseHelper:
             raise ValueError("Unsupported database type")
 
     @classmethod
-    def execute_query(cls, db_config, query):
+    def _get_engine(cls, db_config):
+        """获取或创建引擎（带缓存）"""
         url = cls.get_connection_url(db_config)
-        engine = create_engine(url)
+        if url not in _engine_cache:
+            _engine_cache[url] = create_engine(url, pool_pre_ping=True)
+            logger.info(f"Created new engine for: {db_config.name}")
+        return _engine_cache[url]
+
+    @classmethod
+    def dispose_engine(cls, db_config):
+        """清理指定数据库的引擎缓存"""
+        try:
+            url = cls.get_connection_url(db_config)
+            if url in _engine_cache:
+                _engine_cache[url].dispose()
+                del _engine_cache[url]
+                logger.info(f"Disposed engine for: {db_config.name}")
+        except Exception as e:
+            logger.error(f"Failed to dispose engine: {e}")
+
+    @classmethod
+    def execute_query(cls, db_config, query):
+        engine = cls._get_engine(db_config)
         
         try:
             with engine.connect() as conn:
@@ -40,6 +66,7 @@ class DatabaseHelper:
                         'count': 0
                     }
         except Exception as e:
+            logger.error(f"Query execution error: {e}")
             return {
                 'status': 'error',
                 'error': str(e)
@@ -56,13 +83,14 @@ class DatabaseHelper:
                 return {'status': 'success', 'message': 'Connection successful'}
         except Exception as e:
             return {'status': 'error', 'message': str(e)}
+        finally:
+            engine.dispose()
 
     @classmethod
     def get_tables(cls, db_config):
         """获取数据库所有表名"""
         try:
-            url = cls.get_connection_url(db_config)
-            engine = create_engine(url)
+            engine = cls._get_engine(db_config)
             inspector = inspect(engine)
             return {'status': 'success', 'tables': inspector.get_table_names()}
         except Exception as e:
@@ -72,8 +100,7 @@ class DatabaseHelper:
     def get_table_data(cls, db_config, table_name, limit=100, offset=0, filters=None):
         """获取表数据，支持分页和列筛选"""
         try:
-            url = cls.get_connection_url(db_config)
-            engine = create_engine(url)
+            engine = cls._get_engine(db_config)
             
             # 验证表名是否存在，防止注入
             inspector = inspect(engine)
@@ -128,3 +155,4 @@ class DatabaseHelper:
                 }
         except Exception as e:
             return {'status': 'error', 'message': str(e)}
+

@@ -5,7 +5,7 @@
 
 <div class="row mb-3">
     <div class="col-md-12">
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTaskModal">添加任务</button>
+        <button class="btn btn-primary" onclick="openAddTaskModal()">添加任务</button>
     </div>
 </div>
 
@@ -37,6 +37,7 @@
             </div>
             <div class="modal-body">
                 <form id="addTaskForm">
+                    <input type="hidden" name="id" id="taskId">
                     <div class="mb-3">
                         <label class="form-label">任务名称</label>
                         <input type="text" class="form-control" name="name" required>
@@ -83,12 +84,37 @@
                         <label class="form-label">阈值</label>
                         <input type="number" class="form-control" name="threshold">
                     </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" onclick="addTask()">保存</button>
-            </div>
+                    <div class="mb-3">
+                            <label class="form-label">通知邮箱</label>
+                            <input type="text" class="form-control" name="notify_email" placeholder="多个邮箱用逗号分隔">
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" name="notify_feishu" id="notifyFeishu">
+                            <label class="form-check-label" for="notifyFeishu">发送飞书通知</label>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" name="notify_dingtalk" id="notifyDingtalk">
+                            <label class="form-check-label" for="notifyDingtalk">发送钉钉通知</label>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" name="notify_wechat" id="notifyWechat">
+                            <label class="form-check-label" for="notifyWechat">发送企业微信通知</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">通知规则</label>
+                            <select class="form-select" name="notify_rule">
+                                <option value="none">不通知</option>
+                                <option value="failure">仅失败时</option>
+                                <option value="success">仅成功时</option>
+                                <option value="both">无论成功失败</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveTask()">保存</button>
+                </div>
         </div>
     </div>
 </div>
@@ -160,8 +186,11 @@
         }
     }
 
+    let currentTasks = [];
+
     function loadTasks() {
         $.get('/api/tasks', function(data) {
+            currentTasks = data;
             let html = '';
             data.forEach(task => {
                 const statusBadge = task.is_active 
@@ -186,9 +215,10 @@
                     </td>
                     <td>
                         <button class="btn btn-sm btn-primary me-1" onclick="runTask(${task.id})">立即执行</button>
-                        <button class="btn btn-sm btn-info me-1" onclick="showHistory(${task.id})">历史</button>
+                        <a class="btn btn-sm btn-info me-1" href="/logs?task_id=${task.id}">日志</a>
                         ${toggleBtn}
-                        <button class="btn btn-sm btn-danger">删除</button>
+                        <button class="btn btn-sm btn-secondary me-1" onclick="openEditTaskModal(${task.id})">编辑</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteTask(${task.id})">删除</button>
                     </td>
                 </tr>`;
             });
@@ -244,39 +274,83 @@
         });
     }
 
-    function addTask() {
+    function openAddTaskModal() {
+        $('#taskId').val('');
+        $('#addTaskForm')[0].reset();
+        $('#addTaskModal .modal-title').text('添加任务');
+        new bootstrap.Modal(document.getElementById('addTaskModal')).show();
+    }
+
+    function openEditTaskModal(id) {
+        const task = currentTasks.find(t => t.id === id);
+        if (!task) return;
+
+        $('#taskId').val(task.id);
+        $('#addTaskForm [name="name"]').val(task.name);
+        $('#addTaskForm [name="db_config_id"]').val(task.db_config_id);
+        $('#addTaskForm [name="sql_query"]').val(task.sql_query);
+        $('#addTaskForm [name="cron_expression"]').val(task.cron_expression);
+        $('#addTaskForm [name="check_type"]').val(task.check_type);
+        $('#addTaskForm [name="threshold"]').val(task.threshold);
+        $('#addTaskForm [name="notify_email"]').val(task.notify_email);
+        $('#notifyFeishu').prop('checked', task.notify_feishu);
+        $('#notifyDingtalk').prop('checked', task.notify_dingtalk);
+        $('#notifyWechat').prop('checked', task.notify_wechat);
+        $('#addTaskForm [name="notify_rule"]').val(task.notify_rule || 'none');
+
+        $('#addTaskModal .modal-title').text('编辑任务');
+        new bootstrap.Modal(document.getElementById('addTaskModal')).show();
+    }
+
+    function saveTask() {
         const form = document.getElementById('addTaskForm');
         if (!form.checkValidity()) {
             form.reportValidity();
             return;
         }
 
-        let formData = {};
+        const formData = {};
         $('#addTaskForm').serializeArray().forEach(item => {
             formData[item.name] = item.value;
         });
+        formData.notify_feishu = $('#notifyFeishu').is(':checked');
+        formData.notify_dingtalk = $('#notifyDingtalk').is(':checked');
+        formData.notify_wechat = $('#notifyWechat').is(':checked');
+
+        const taskId = $('#taskId').val();
+        const method = taskId ? 'PUT' : 'POST';
+        const url = taskId ? `/api/tasks/${taskId}` : '/api/tasks';
 
         $.ajax({
-            url: '/api/tasks',
-            type: 'POST',
+            url: url,
+            type: method,
             contentType: 'application/json',
             data: JSON.stringify(formData),
             success: function(response) {
-                // 尝试关闭模态框
                 const modalEl = document.getElementById('addTaskModal');
                 const modal = bootstrap.Modal.getInstance(modalEl);
-                if (modal) {
-                    modal.hide();
-                } else {
-                    // 如果获取不到实例，尝试用 jQuery
-                    $('#addTaskModal').modal('hide');
-                }
+                if (modal) modal.hide();
+                else $('#addTaskModal').modal('hide');
                 
                 loadTasks();
-                form.reset();
             },
             error: function(xhr) {
                 alert('保存失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : '未知错误'));
+            }
+        });
+    }
+
+    function deleteTask(id) {
+        if (!confirm('确定要删除此任务吗？')) return;
+        
+        $.ajax({
+            url: `/api/tasks/${id}`,
+            type: 'DELETE',
+            success: function(response) {
+                loadTasks();
+            },
+            error: function(xhr) {
+                alert('删除失败: ' + (xhr.responseJSON ? xhr.responseJSON.message : '未知错误'));
             }
         });
     }

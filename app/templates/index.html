@@ -1,40 +1,111 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12">
-        <h1>欢迎使用数据库监控系统</h1>
-        <p class="lead">监控数据库状态，执行SQL查询，管理定时任务。</p>
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+            <div class="card-body text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1 opacity-75">数据库</h6>
+                        <h2 class="mb-0" id="statDbCount">-</h2>
+                    </div>
+                    <i class="bi bi-database display-5 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
+            <div class="card-body text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1 opacity-75">总任务数</h6>
+                        <h2 class="mb-0" id="statTaskCount">-</h2>
+                    </div>
+                    <i class="bi bi-list-task display-5 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">
+            <div class="card-body text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1 opacity-75">活跃任务</h6>
+                        <h2 class="mb-0" id="statActiveCount">-</h2>
+                    </div>
+                    <i class="bi bi-play-circle display-5 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #43e97b, #38f9d7);">
+            <div class="card-body text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1 opacity-75">最近成功/失败</h6>
+                        <h2 class="mb-0"><span id="statSuccess">-</span> / <span id="statError"
+                                class="text-warning">-</span></h2>
+                    </div>
+                    <i class="bi bi-graph-up display-5 opacity-50"></i>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
-<div class="row mt-4">
+<div class="row">
+    <div class="col-md-12">
+        <h4>欢迎使用数据库监控系统</h4>
+        <p class="text-muted">监控数据库状态，执行SQL查询，管理定时任务。</p>
+    </div>
+</div>
+
+<div class="row mt-3">
     <div class="col-md-4">
-        <div class="card">
+        <div class="card shadow-sm h-100">
             <div class="card-body">
-                <h5 class="card-title">数据库管理</h5>
-                <p class="card-text">添加和配置数据库连接。</p>
+                <h5 class="card-title"><i class="bi bi-hdd-stack text-primary me-2"></i>数据库管理</h5>
+                <p class="card-text text-muted">添加和配置数据库连接，支持 MySQL、PostgreSQL、SQLite。</p>
                 <a href="/databases" class="btn btn-primary">管理数据库</a>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card">
+        <div class="card shadow-sm h-100">
             <div class="card-body">
-                <h5 class="card-title">SQL查询</h5>
-                <p class="card-text">执行SQL查询并查看结果。</p>
+                <h5 class="card-title"><i class="bi bi-terminal text-success me-2"></i>SQL查询</h5>
+                <p class="card-text text-muted">执行SQL查询并查看结果，支持保存常用查询和导出CSV。</p>
                 <a href="/query" class="btn btn-success">开始查询</a>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card">
+        <div class="card shadow-sm h-100">
             <div class="card-body">
-                <h5 class="card-title">定时任务</h5>
-                <p class="card-text">设置定时检查任务和通知。</p>
+                <h5 class="card-title"><i class="bi bi-clock-history text-info me-2"></i>定时任务</h5>
+                <p class="card-text text-muted">设置定时检查任务，支持异常检测和多渠道通知。</p>
                 <a href="/tasks" class="btn btn-info">管理任务</a>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        $.get('/api/dashboard', function (data) {
+            $('#statDbCount').text(data.db_count || 0);
+            $('#statTaskCount').text(data.task_count || 0);
+            $('#statActiveCount').text(data.active_task_count || 0);
+            $('#statSuccess').text(data.recent_success || 0);
+            $('#statError').text(data.recent_error || 0);
+        });
+    });
+</script>
 {% endblock %}

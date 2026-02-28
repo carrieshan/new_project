@@ -23,12 +23,16 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #555; 
         }
+        /* Toast 样式优化 */
+        .toast-container {
+            z-index: 9999;
+        }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
-            <a class="navbar-brand" href="/">数据库监控</a>
+            <a class="navbar-brand" href="/"><i class="bi bi-database-gear me-2"></i>数据库监控</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -49,6 +53,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/tasks">定时任务</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#settingsModal">系统设置</a>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -58,7 +65,219 @@
         {% block content %}{% endblock %}
     </div>
 
+    <!-- Toast 通知组件 -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="globalToast" class="toast align-items-center border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body" id="toastBody"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Settings Modal -->
+    <div class="modal fade" id="settingsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">系统设置</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="smtp-tab" data-bs-toggle="tab" data-bs-target="#smtp" type="button" role="tab">SMTP</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="feishu-tab" data-bs-toggle="tab" data-bs-target="#feishu" type="button" role="tab">飞书</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="dingtalk-tab" data-bs-toggle="tab" data-bs-target="#dingtalk" type="button" role="tab">钉钉</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="wechat-tab" data-bs-toggle="tab" data-bs-target="#wechat" type="button" role="tab">企业微信</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content pt-3" id="settingsTabContent">
+                        <div class="tab-pane fade show active" id="smtp" role="tabpanel">
+                            <form id="smtpForm">
+                                <div class="mb-3">
+                                    <label class="form-label">SMTP 服务器</label>
+                                    <input type="text" class="form-control" name="smtp_host" placeholder="smtp.example.com">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">端口</label>
+                                    <input type="number" class="form-control" name="smtp_port" placeholder="587">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">用户名</label>
+                                    <input type="text" class="form-control" name="smtp_user">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">密码</label>
+                                    <input type="password" class="form-control" name="smtp_pass">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">发件人邮箱</label>
+                                    <input type="email" class="form-control" name="smtp_from" placeholder="alert@example.com">
+                                </div>
+                            </form>
+                        </div>
+                        <div class="tab-pane fade" id="feishu" role="tabpanel">
+                            <form id="feishuForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Webhook URL</label>
+                                    <input type="text" class="form-control" name="feishu_webhook" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Secret (可选)</label>
+                                    <input type="text" class="form-control" name="feishu_secret" placeholder="签名校验密钥">
+                                </div>
+                            </form>
+                        </div>
+                        <div class="tab-pane fade" id="dingtalk" role="tabpanel">
+                            <form id="dingtalkForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Webhook URL</label>
+                                    <input type="text" class="form-control" name="dingtalk_webhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Secret (可选)</label>
+                                    <input type="text" class="form-control" name="dingtalk_secret" placeholder="加签密钥">
+                                </div>
+                            </form>
+                        </div>
+                        <div class="tab-pane fade" id="wechat" role="tabpanel">
+                            <form id="wechatForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Webhook URL</label>
+                                    <input type="text" class="form-control" name="wechat_webhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-info" onclick="testConfig()">测试</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveConfig()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ===== 全局 Toast 通知 =====
+        function showToast(message, type = 'success') {
+            const toastEl = document.getElementById('globalToast');
+            const toastBody = document.getElementById('toastBody');
+            
+            // 设置颜色
+            toastEl.className = 'toast align-items-center border-0';
+            if (type === 'success') {
+                toastEl.classList.add('text-white', 'bg-success');
+            } else if (type === 'error') {
+                toastEl.classList.add('text-white', 'bg-danger');
+            } else if (type === 'warning') {
+                toastEl.classList.add('text-white', 'bg-warning');
+            } else {
+                toastEl.classList.add('text-white', 'bg-info');
+            }
+            
+            toastBody.textContent = message;
+            const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+            toast.show();
+        }
+
+        // ===== 通用 Ajax POST =====
+        function postJson(url, data) {
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: url,
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    success: resolve,
+                    error: (xhr) => reject(xhr.responseJSON ? xhr.responseJSON.message : '未知错误')
+                });
+            });
+        }
+
+        function getFormData(formId) {
+            let data = {};
+            $(`#${formId}`).serializeArray().forEach(item => {
+                data[item.name] = item.value;
+            });
+            return data;
+        }
+
+        // ===== 设置弹窗：加载配置 =====
+        var settingsModal = document.getElementById('settingsModal');
+        if (settingsModal) {
+            settingsModal.addEventListener('show.bs.modal', function (event) {
+                $.get('/api/settings/smtp', function(data) {
+                    $('input[name="smtp_host"]').val(data.smtp_host);
+                    $('input[name="smtp_port"]').val(data.smtp_port);
+                    $('input[name="smtp_user"]').val(data.smtp_user);
+                    $('input[name="smtp_pass"]').val(data.smtp_pass);
+                    $('input[name="smtp_from"]').val(data.smtp_from);
+                });
+                $.get('/api/settings/feishu', function(data) {
+                    $('input[name="feishu_webhook"]').val(data.feishu_webhook);
+                    $('input[name="feishu_secret"]').val(data.feishu_secret);
+                });
+                $.get('/api/settings/dingtalk', function(data) {
+                    $('input[name="dingtalk_webhook"]').val(data.dingtalk_webhook);
+                    $('input[name="dingtalk_secret"]').val(data.dingtalk_secret);
+                });
+                $.get('/api/settings/wechat', function(data) {
+                    $('input[name="wechat_webhook"]').val(data.wechat_webhook);
+                });
+            });
+        }
+
+        // ===== 保存配置 (使用 Promise.all 替代回调地狱) =====
+        async function saveConfig() {
+            try {
+                await Promise.all([
+                    postJson('/api/settings/smtp', getFormData('smtpForm')),
+                    postJson('/api/settings/feishu', getFormData('feishuForm')),
+                    postJson('/api/settings/dingtalk', getFormData('dingtalkForm')),
+                    postJson('/api/settings/wechat', getFormData('wechatForm'))
+                ]);
+                showToast('所有配置保存成功');
+                bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+            } catch (err) {
+                showToast('保存失败: ' + err, 'error');
+            }
+        }
+
+        // ===== 测试配置 =====
+        async function testConfig() {
+            let activeTab = document.querySelector('#settingsTabs .active').id;
+            
+            try {
+                if (activeTab === 'smtp-tab') {
+                    let email = prompt("请输入接收测试邮件的邮箱地址:");
+                    if (!email) return;
+                    await postJson('/api/settings/smtp/test', { email: email });
+                    showToast('测试邮件发送成功');
+                } else if (activeTab === 'feishu-tab') {
+                    await postJson('/api/settings/feishu/test', {});
+                    showToast('飞书测试消息发送成功');
+                } else if (activeTab === 'dingtalk-tab') {
+                    await postJson('/api/settings/dingtalk/test', {});
+                    showToast('钉钉测试消息发送成功');
+                } else if (activeTab === 'wechat-tab') {
+                    await postJson('/api/settings/wechat/test', {});
+                    showToast('企业微信测试消息发送成功');
+                }
+            } catch (err) {
+                showToast('发送失败: ' + err, 'error');
+            }
+        }
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

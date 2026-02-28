@@ -21,3 +21,7 @@ def query():
 @main_bp.route('/tasks')
 def tasks():
     return render_template('tasks.html')
+
+@main_bp.route('/logs')
+def logs():
+    return render_template('logs.html')

@@ -1,6 +1,16 @@
+import os
+import logging
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_apscheduler import APScheduler
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('db_monitor')
 
 db = SQLAlchemy()
 scheduler = APScheduler()
@@ -9,7 +19,7 @@ def create_app():
     app = Flask(__name__)
     
     # 配置
-    app.config['SECRET_KEY'] = 'dev-secret-key'
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///monitor.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
@@ -47,8 +57,8 @@ def create_app():
                             replace_existing=True,
                             **cron_args
                         )
-                        print(f"Scheduled task {task.id}: {task.name}")
+                        logger.info(f"Scheduled task {task.id}: {task.name}")
         except Exception as e:
-            print(f"Failed to load scheduled tasks: {e}")
+            logger.error(f"Failed to load scheduled tasks: {e}")
         
     return app
